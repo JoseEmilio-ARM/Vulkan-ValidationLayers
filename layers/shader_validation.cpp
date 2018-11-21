@@ -2007,6 +2007,9 @@ bool PreCallValidateCreateShaderModule(layer_data *dev_data, VkShaderModuleCreat
         if (GetDeviceExtensions(dev_data)->vk_khr_relaxed_block_layout) {
             spvValidatorOptionsSetRelaxBlockLayout(options, true);
         }
+        if (GetDeviceExtensions(dev_data)->vk_khr_scalar_block_layout) {
+            spvValidatorOptionsSetScalarBlockLayout(options, true);
+        }
         spv_valid = spvValidateWithOptions(ctx, options, &binary, &diag);
         if (spv_valid != SPV_SUCCESS) {
             if (!have_glsl_shader || (pCreateInfo->pCode[0] == spv::MagicNumber)) {
