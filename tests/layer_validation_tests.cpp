@@ -34628,6 +34628,127 @@ TEST_F(VkLayerTest, FramebufferMixedSamples) {
     }
 }
 
+#ifdef VK_USE_PLATFORM_ANDROID_KHR    // or ifdef ANDROID?  
+#include "android_ndk_types.h"
+
+TEST_F(VkLayerTest, AndroidHardwareBufferImageCreate) {
+    TEST_DESCRIPTION("Verify AndroidHardwareBuffer image create info.");
+
+    SetTargetApiVersion(VK_API_VERSION_1_1);
+    ASSERT_NO_FATAL_FAILURE(InitFramework(myDbgFunc, m_errorMonitor));
+
+    if (DeviceExtensionSupported(gpu(), nullptr, VK_ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_EXTENSION_NAME)) {
+        m_device_extension_names.push_back(VK_ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_EXTENSION_NAME);
+        m_device_extension_names.push_back(VK_KHR_SAMPLER_YCBCR_CONVERSION_EXTENSION_NAME);
+        m_device_extension_names.push_back(VK_KHR_MAINTENANCE1_EXTENSION_NAME);
+        m_device_extension_names.push_back(VK_KHR_BIND_MEMORY_2_EXTENSION_NAME);
+        m_device_extension_names.push_back(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME);
+        m_device_extension_names.push_back(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
+        m_device_extension_names.push_back(VK_EXT_QUEUE_FAMILY_FOREIGN_EXTENSION_NAME);
+    } else {
+        printf("%s %s extension not supported, skipping tests\n", kSkipPrefix, VK_ANDROID_EXTERNAL_MEMORY_ANDROID_HARDWARE_BUFFER_EXTENSION_NAME);
+        return;
+    }
+
+    ASSERT_NO_FATAL_FAILURE(InitState());
+    ASSERT_NO_FATAL_FAILURE(InitRenderTarget());
+
+    VkImage img = VK_NULL_HANDLE;
+    auto reset_img = [&img, this]() {
+        if (VK_NULL_HANDLE != img) vkDestroyImage(m_device->device(), img, NULL);
+        img = VK_NULL_HANDLE;
+    };
+
+    VkImageCreateInfo ici = {};
+    ici.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    ici.pNext = nullptr;
+    ici.imageType = VK_IMAGE_TYPE_2D;
+    ici.arrayLayers = 1;
+    ici.extent = { 64, 64, 1 };
+    ici.format = VK_FORMAT_UNDEFINED;
+    ici.mipLevels = 1;
+    ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    ici.mipLevels = 1;
+    ici.samples = VK_SAMPLE_COUNT_1_BIT;
+    ici.tiling = VK_IMAGE_TILING_OPTIMAL;
+    ici.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    // undefined format
+    m_errorMonitor->SetDesiredFailureMsg(VK_DEBUG_REPORT_ERROR_BIT_EXT, "VUID-VkImageCreateInfo-pNext-01975");
+    vkCreateImage(m_device->device(), &ici, NULL, &img);
+    m_errorMonitor->VerifyFound();
+    reset_img();
+
+    // also undefined format
+    VkExternalFormatANDROID efa = {};
+    efa.sType = VK_STRUCTURE_TYPE_EXTERNAL_FORMAT_ANDROID;
+    efa.externalFormat = 0;
+    ici.pNext = &efa;
+    m_errorMonitor->SetDesiredFailureMsg(VK_DEBUG_REPORT_ERROR_BIT_EXT, "VUID-VkImageCreateInfo-pNext-01975");
+    vkCreateImage(m_device->device(), &ici, NULL, &img);
+    m_errorMonitor->VerifyFound();
+    reset_img();
+
+    // undefined format with an unknown external format
+    efa.externalFormat = 0xC0DE;
+    m_errorMonitor->SetDesiredFailureMsg(VK_DEBUG_REPORT_ERROR_BIT_EXT, "VUID-VkExternalFormatANDROID-externalFormat-01894");
+    vkCreateImage(m_device->device(), &ici, NULL, &img);
+    m_errorMonitor->VerifyFound();
+    reset_img();
+
+    // imageType
+    VkExternalMemoryImageCreateInfo emici = {};
+    emici.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
+    emici.handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_ANDROID_HARDWARE_BUFFER_BIT_ANDROID;
+    ici.pNext = &emici; // remove efa from chain, insert emici
+    ici.format = VK_FORMAT_R8G8B8A8_UNORM;
+    ici.imageType = VK_IMAGE_TYPE_3D;
+    ici.extent = { 64, 64, 64 };
+
+    m_errorMonitor->SetDesiredFailureMsg(VK_DEBUG_REPORT_ERROR_BIT_EXT, "VUID-VkImageCreateInfo-pNext-02393");
+    vkCreateImage(m_device->device(), &ici, NULL, &img);
+    m_errorMonitor->VerifyFound();
+    reset_img();
+
+    // wrong mipLevels
+    ici.imageType = VK_IMAGE_TYPE_2D;
+    ici.extent = { 64, 64, 1 };
+    ici.mipLevels = 6;  // should be 7
+    m_errorMonitor->SetDesiredFailureMsg(VK_DEBUG_REPORT_ERROR_BIT_EXT, "VUID-VkImageCreateInfo-pNext-02394");
+    vkCreateImage(m_device->device(), &ici, NULL, &img);
+    m_errorMonitor->VerifyFound();
+    reset_img();
+    ici.mipLevels = 7;
+
+    // conflicting formats
+    AHardwareBuffer *ahb;
+    AHardwareBuffer_Desc ahb_desc = {};
+    ahb_desc.format = AHARDWAREBUFFER_FORMAT_BLOB;
+    ahb_desc.usage = AHARDWAREBUFFER_USAGE_GPU_SAMPLED_IMAGE;
+    ahb_desc.width = 64;
+    ahb_desc.height = 64;
+    ahb_desc.layers = 1;
+    // Allocate an AHardwareBuffer
+    AHardwareBuffer_allocate(&ahb_desc, &ahb);
+    // Retrieve it's properties to make it's external format 'known'
+    VkAndroidHardwareBufferPropertiesANDROID ahb_props;
+    PFN_vkGetAndroidHardwareBufferPropertiesANDROID pfn_GetAHBProps =
+        (PFN_vkGetAndroidHardwareBufferPropertiesANDROID)vkGetInstanceProcAddr(instance(), "vkGetAndroidHardwareBufferPropertiesANDROID");
+    ASSERT_TRUE(pfn_GetAHBProps != nullptr);
+
+    pfn_GetAHBProps(m_device->device(), ahb, &ahb_props);
+ 
+    m_errorMonitor->SetDesiredFailureMsg(VK_DEBUG_REPORT_ERROR_BIT_EXT, "VUID-VkImageCreateInfo-pNext-01974");
+    vkCreateImage(m_device->device(), &ici, NULL, &img);
+    m_errorMonitor->VerifyFound();
+    reset_img();
+
+
+
+}
+
+#endif
+
 #if defined(ANDROID) && defined(VALIDATION_APK)
 const char *appTag = "VulkanLayerValidationTests";
 static bool initialized = false;

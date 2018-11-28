@@ -1258,6 +1258,7 @@ bool ValidateCreateImageANDROID(layer_data *device_data, const debug_report_data
                             create_info->mipLevels, FullMipChainLevels(create_info->extent));
         }
 
+        // TBD - this VU is completely subsumed by 01975, and will be removed in an upcoming spec.  No test.
         if (create_info->format == VK_FORMAT_UNDEFINED) {
             if ((nullptr == ext_fmt_android) || (0 == ext_fmt_android->externalFormat)) {
                 skip |= log_msg(report_data, VK_DEBUG_REPORT_ERROR_BIT_EXT, VK_DEBUG_REPORT_OBJECT_TYPE_UNKNOWN_EXT, 0,
