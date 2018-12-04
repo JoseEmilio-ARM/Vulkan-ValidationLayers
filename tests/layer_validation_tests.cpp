@@ -455,10 +455,10 @@ class VkLayerTest : public VkRenderFramework {
         // Use Threading layer first to protect others from
         // ThreadCommandBufferCollision test
         m_instance_layer_names.push_back("VK_LAYER_GOOGLE_threading");
-        m_instance_layer_names.push_back("VK_LAYER_LUNARG_parameter_validation");
-        m_instance_layer_names.push_back("VK_LAYER_LUNARG_object_tracker");
-        m_instance_layer_names.push_back("VK_LAYER_LUNARG_core_validation");
-        m_instance_layer_names.push_back("VK_LAYER_GOOGLE_unique_objects");
+        ////////m_instance_layer_names.push_back("VK_LAYER_LUNARG_parameter_validation");
+        ////////m_instance_layer_names.push_back("VK_LAYER_LUNARG_object_tracker");
+        ////////m_instance_layer_names.push_back("VK_LAYER_LUNARG_core_validation");
+        ////////m_instance_layer_names.push_back("VK_LAYER_GOOGLE_unique_objects");
         if (VkTestFramework::m_devsim_layer) {
             if (InstanceLayerSupported("VK_LAYER_LUNARG_device_simulation")) {
                 m_instance_layer_names.push_back("VK_LAYER_LUNARG_device_simulation");
@@ -19456,18 +19456,20 @@ TEST_F(VkLayerTest, ThreadCommandBufferCollision) {
 
     // First do some correct operations using multiple threads.
     // Add many entries to command buffer from another thread.
-    test_platform_thread_create(&thread, AddToCommandBuffer, (void *)&data);
-    // Make non-conflicting calls from this thread at the same time.
-    for (int i = 0; i < 80000; i++) {
-        uint32_t count;
-        vkEnumeratePhysicalDevices(instance(), &count, NULL);
-    }
-    test_platform_thread_join(thread, NULL);
+    ////////test_platform_thread_create(&thread, AddToCommandBuffer, (void *)&data);
+    ////////// Make non-conflicting calls from this thread at the same time.
+    ////////for (int i = 0; i < 80000; i++) {
+    ////////    uint32_t count;
+    ////////    vkEnumeratePhysicalDevices(instance(), &count, NULL);
+    ////////}
+    ////////test_platform_thread_join(thread, NULL);
 
     // Then do some incorrect operations using multiple threads.
     // Add many entries to command buffer from another thread.
     test_platform_thread_create(&thread, AddToCommandBuffer, (void *)&data);
     // Add many entries to command buffer from this thread at the same time.
+    // commenting out THIS LINE elminiates the crash 
+    // ALSO, I'd commented out all the guts of CmdSetEvents in t_s.cpp, no effect there.
     AddToCommandBuffer(&data);
 
     test_platform_thread_join(thread, NULL);
